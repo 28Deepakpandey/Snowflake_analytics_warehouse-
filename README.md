@@ -1,191 +1,198 @@
 
 ---
 
-# **Sales Analytics Project**
+# **Sales Analytics Project – End-to-End Snowflake Data Warehouse**
 
 ## **Project Overview**
 
-* Goal: Build a **Snowflake data warehouse** for sales analytics.
-* Data: Customers, Products, Transactions (CSV files).
-* Architecture: **Layered approach** → Raw → Staging → Production → Reporting.
-* Benefits: Clean analytics, reusable datasets, BI-ready, traceable data pipeline.
-* Platform: **Snowflake**
+The **Sales Analytics Data Warehouse** is built on **Snowflake** to provide a robust, scalable, and BI-ready analytics solution.
+
+**Goals:**
+
+* Centralized storage of **customer, product, and transaction data**
+* Clean, validated, and traceable datasets
+* Optimized for **business reporting and analytics**
+* Monitoring and optimization for **reliability, performance, and cost efficiency**
+
+**Key Features:**
+
+* **Layered architecture:** RAW → STAGING → PRODUCTION → REPORTING → MONITORING → OPTIMIZATION
+* **Star schema** for analytics-ready tables
+* Production-grade **monitoring and optimization**
 
 ---
 
-## **Layer 1 – RAW (Data Ingestion)**
+## **Architecture Layers**
 
-**Purpose:** Land source data **as-is**, without transformations.
+### **Layer 1 – RAW (Data Ingestion)**
 
-**Steps:**
+**Purpose:** Ingest data **as-is** without transformations.
 
-1. **Warehouse:**
+**Components:**
 
-   * `ingest_wh` – lightweight, auto-suspend/resume for CSV loading.
+| Component           | Description                                            |
+| ------------------- | ------------------------------------------------------ |
+| Warehouse           | `ingest_wh` (auto suspend/resume for CSV loading)      |
+| Database/Schema     | `sales_analytics.raw`                                  |
+| Tables              | `customers`, `products`, `transactions`                |
+| File Format & Stage | CSV format `csv_ff` + internal stage `sales_csv_stage` |
 
-2. **Database & Schemas:**
+**Characteristics:**
 
-   * Database: `sales_analytics`
-   * Schemas: `raw`, `staging`, `production`
-
-3. **File Format:**
-
-   * CSV (`csv_ff`) with headers, trimmed spaces, optional quotes, null handling.
-
-4. **Stage:**
-
-   * Internal stage `sales_csv_stage` for CSV files.
-   * Upload: `customers.csv`, `transactions.csv`, `products.csv`.
-
-5. **Raw Tables:**
-
-   * `raw.customers` → customer info (all strings)
-   * `raw.transactions` → transactions (all strings)
-   * `raw.products` → product info (all strings)
-   * **Load timestamp** added for traceability.
-
-6. **Load Data (COPY INTO):**
-
-   * Load CSV files into raw tables.
-   * Preserve **source file info**.
-
-**Key Point:**
-
-* **No transformations or calculations**.
-* Data is immutable and traceable.
+* Preserves original data
+* Adds load timestamp and source file info
+* Immutable for traceability
+* No transformations
 
 ---
 
-## **Layer 2 – STAGING (Transformation & Clean Tables)**
+### **Layer 2 – STAGING (Data Cleaning & Transformation)**
 
-**Purpose:** Clean, type-cast, and derive metrics. Prepare for analytics.
+**Purpose:** Prepare data for analytics by type-casting, validation, and metric derivation.
 
-**Steps:**
+**Tables & Transformations:**
 
-1. **Staging Tables:**
+| Table                  | Key Actions / Metrics                                                                                 |
+| ---------------------- | ----------------------------------------------------------------------------------------------------- |
+| `staging.customers`    | Type-cast IDs and dates                                                                               |
+| `staging.products`     | Type-cast IDs, unit_price                                                                             |
+| `staging.transactions` | Type-cast IDs, quantity, unit_price, transaction_date; derived `total_amount = quantity × unit_price` |
 
-   * `staging.customers` → type-cast IDs and dates
-   * `staging.products` → type-cast IDs, unit_price
-   * `staging.transactions` → type-cast IDs, quantity, unit_price, transaction_date
+**Notes:**
 
-     * **Derived metric:** `total_amount = quantity × unit_price`
-
-2. **Load Timestamp:**
-
-   * Add `load_ts` to track staging load.
-
-3. **Basic Validation:**
-
-   * Check missing customer or product references.
-   * Optional stored procedure: `staging.validate_data()`.
-
-**Key Point:**
-
-* Clean, typed tables ready for fact/dimension modeling.
-* Derived metrics calculated in this layer.
-* Prevents downstream errors in analytics.
+* Load timestamp added for audit
+* Basic validation: missing references, invalid IDs
+* Ensures **downstream reliability**
 
 ---
 
-## **Layer 3 – PRODUCTION (Fact & Dimension Modeling)**
+### **Layer 3 – PRODUCTION (Fact & Dimension Modeling)**
 
-**Purpose:** Build **analytics-ready tables** (star schema).
+**Purpose:** Build **analytics-ready tables** using a **star schema**.
 
-**Steps:**
+| Table           | Type      | Description                                                                                             |
+| --------------- | --------- | ------------------------------------------------------------------------------------------------------- |
+| `fact_sales`    | Fact      | Grain: one row per customer × product × transaction_date; clustered by `(transaction_date, product_id)` |
+| `dim_customers` | Dimension | Customer attributes + derived metrics (lifetime transactions, lifetime value, last purchase date)       |
+| `dim_products`  | Dimension | Product attributes + derived metrics (avg_unit_price)                                                   |
 
-1. **Fact Table – `fact_sales`:**
+**Key Points:**
 
-   * Grain: **one row per customer × product × transaction_date**
-   * Columns: transaction_id, customer_id, product_id, quantity, unit_price, total_amount, customer_country, product_category, load_ts
-   * Clustered by `(transaction_date, product_id)` for performance.
-
-2. **Dimension Table – `dim_customers`:**
-
-   * Columns: customer_id, customer_name, email, country, created_date
-   * Derived metrics: lifetime_transactions, lifetime_value, last_purchase_date
-
-3. **Optional Dimension – `dim_products`:**
-
-   * Columns: product_id, product_name, category, supplier
-   * Derived metric: avg_unit_price
-
-**Key Point:**
-
-* Optimized for BI queries and aggregation.
-* Star schema: fact_sales joins dim_customers & dim_products.
-* Supports customer-level and product-level analysis.
+* Optimized for BI queries and aggregations
+* Star schema supports customer-level and product-level analysis
+* Performance-focused clustering
 
 ---
 
-## **Layer 4 – REPORTING & BUSINESS VIEWS**
+### **Layer 4 – REPORTING (Business Views)**
 
-**Purpose:** Provide **ready-to-use analytics** for business / dashboards.
+**Purpose:** Provide ready-to-use views for business dashboards.
 
-**Steps:**
+| View                   | Purpose                                  |
+| ---------------------- | ---------------------------------------- |
+| `vw_daily_sales`       | Daily revenue trends                     |
+| `vw_top_products`      | Top-selling products                     |
+| `vw_customer_segments` | Customer segmentation and lifetime value |
 
-1. **Views (Example):**
+**Notes:**
 
-   * `vw_daily_sales` → daily revenue trends
-   * `vw_top_products` → top-selling products
-   * `vw_customer_segments` → customer segmentation / value
+* Pre-aggregated metrics for fast BI access
+* Simplified, business-friendly columns
+* Read-only to prevent accidental changes
 
-2. **Monitoring / Audit Table – `load_audit`:**
+**Sample Visuals:**
 
-   * Tracks table/layer name, row count, load timestamp, success/failure
-   * Ensures pipeline health and traceability.
+**Daily Sales Revenue**
 
-**Key Point:**
-
-* No raw data changes; read-only.
-* Pre-aggregated metrics for fast BI access.
-* Simplified, business-friendly columns.
-
-
----
-
-##  Reporting Queries – Sample Outputs
-
-The following screenshots demonstrate how **production fact and dimension tables**
-are used to generate **business-ready reporting views** in Snowflake.
-
-###  Daily Sales Revenue (`vw_daily_sales`)
 <p align="center">
   <img src="image/daily_sales.png" width="750">
 </p>
 
-This view shows daily revenue trends aggregated from the `fact_sales` table,
-supporting time-series analysis and KPI tracking.
+**Top Selling Products**
 
----
-
-###  Top Selling Products (`vw_top_products`)
 <p align="center">
   <img src="image/top_products.png" width="750">
 </p>
 
-Highlights top-performing products based on total sales amount,
-enabling product performance analysis and inventory planning.
+**Customer Segmentation**
 
----
-
-###  Customer Segmentation (`vw_customer_segments`)
 <p align="center">
   <img src="image/customer_segments.png" width="750">
 </p>
 
-Segments customers by purchasing behavior and lifetime value,
-supporting targeted marketing and customer analytics.
+---
+
+### **Layer 5 – MONITORING & OBSERVABILITY**
+
+**Purpose:** Track warehouse performance, query execution, data pipeline health, and costs.
+
+| Monitoring Area      | Data Source                                 | Description                                     |
+| -------------------- | ------------------------------------------- | ----------------------------------------------- |
+| Warehouse Load       | `INFORMATION_SCHEMA.WAREHOUSE_LOAD_HISTORY` | Active queries, queued queries, blocked queries |
+| Query Performance    | `ACCOUNT_USAGE.QUERY_HISTORY`               | Query runtime, bytes scanned, rows produced     |
+| Long-Running Queries | `QUERY_HISTORY`                             | Queries exceeding threshold execution time      |
+| Failed Queries       | `QUERY_HISTORY`                             | Pipeline failures and SQL errors                |
+| Credit Usage         | `WAREHOUSE_METERING_HISTORY`                | Compute credit consumption                      |
+| Expensive Queries    | `QUERY_HISTORY`                             | Large data scans                                |
+| Pipeline Row Counts  | RAW/STAGING/PRODUCTION tables               | Ensure data completeness and correctness        |
+| Daily Credit Trends  | `WAREHOUSE_METERING_HISTORY`                | Track credit usage over time                    |
+
+**Implementation:**
+
+* 8 views created in `monitoring` schema
+* Dashboard-ready queries for BI and alerting
+
+---
+
+### **Layer 6 – OPTIMIZATION (Performance & Cost)**
+
+**Purpose:** Ensure system efficiency, fast queries, and cost control.
+
+| Technique                    | Description                                                       |
+| ---------------------------- | ----------------------------------------------------------------- |
+| Table Clustering             | `(transaction_date, product_id)` on fact table                    |
+| Query Optimization           | Only select necessary columns, use filters                        |
+| Query Profiling              | Use `QUERY_HISTORY` to analyze slow/expensive queries             |
+| Warehouse Auto Scaling       | Multi-cluster scaling for concurrency                             |
+| Auto Suspend & Resume        | Suspend idle warehouse to reduce costs                            |
+| Result Caching               | Reuse query results to save compute and speed up repeated queries |
+| Micro-Partition Pruning      | Filter queries scan only relevant partitions                      |
+| Clustering Health Monitoring | `SYSTEM$CLUSTERING_INFORMATION` to check clustering efficiency    |
 
 ---
 
 ## **Data Flow Summary**
 
-| Step | Layer      | Action                           |
-| ---- | ---------- | -------------------------------- |
-| 1    | RAW        | Load CSV files into raw tables   |
-| 2    | STAGING    | Parse, type-cast, derive metrics |
-| 3    | PRODUCTION | Build fact & dimension tables    |
-| 4    | REPORTING  | Create KPI views and audit table |
+```
+Source CSV Files
+       │
+       ▼
+RAW Layer (Immutable, CSV load)
+       │
+       ▼
+STAGING Layer (Clean, typed, metrics derived)
+       │
+       ▼
+PRODUCTION Layer (Fact & Dimension tables, star schema)
+       │
+       ▼
+REPORTING Layer (BI views: daily sales, top products, customer segments)
+       │
+       ▼
+MONITORING Layer (Warehouse load, query performance, pipeline health)
+       │
+       ▼
+OPTIMIZATION Layer (Clustering, query tuning, auto scaling, cost control)
+```
+
+| Step | Layer        | Action                                    |
+| ---- | ------------ | ----------------------------------------- |
+| 1    | RAW          | Load CSV files into raw tables            |
+| 2    | STAGING      | Parse, type-cast, derive metrics          |
+| 3    | PRODUCTION   | Build fact & dimension tables             |
+| 4    | REPORTING    | Create KPI views and audit table          |
+| 5    | MONITORING   | Track warehouse, queries, pipeline health |
+| 6    | OPTIMIZATION | Performance tuning & cost control         |
 
 ---
 
@@ -193,17 +200,29 @@ supporting targeted marketing and customer analytics.
 
 * Customers (1) → Transactions (many)
 * Products (1) → Transactions (many)
-* Supports: customer-level revenue, product performance, drill-down analysis.
+* Supports: customer-level revenue, product performance, drill-down analysis
 
 ---
 
-## **Key Learning / Takeaways**
+## **Key Takeaways**
 
-* Layered architecture ensures **clean, traceable data**
-* RAW layer → preserves source data
-* STAGING → typed and validated
+* **Layered architecture** ensures clean, traceable data
+* RAW → preserves source data
+* STAGING → typed, validated, and metrics derived
 * PRODUCTION → analytics-ready star schema
-* REPORTING → business-friendly views + monitoring
+* REPORTING → business-friendly views
+* MONITORING → observability for pipeline, queries, and warehouse
+* OPTIMIZATION → clustering, query tuning, cost efficiency
 * Derived metrics: `total_amount`, lifetime value, avg unit_price
+
+---
+
+✅ **Conclusion**
+
+This **End-to-End Snowflake Data Warehouse** demonstrates:
+
+* Full enterprise-grade architecture: ingestion → cleaning → modeling → reporting → monitoring → optimization
+* BI-ready tables, dashboards, and views
+* Production best practices for **performance, reliability, and cost efficiency**
 
 ---

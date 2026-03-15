@@ -19,3 +19,4 @@ FROM production.dim_customers;
 
 -- Check customer segments
 SELECT * FROM production.vw_customer_segments LIMIT 10;
+

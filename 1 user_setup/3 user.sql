@@ -37,3 +37,4 @@ GRANT ROLE data_engineer TO USER nishita;
 
 
 GRANT ROLE data_engineer TO ROLE SYSADMIN;
+
